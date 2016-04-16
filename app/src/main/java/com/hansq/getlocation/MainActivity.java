@@ -7,18 +7,27 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
+    public static final int SHOW_LOCATION = 0;
     public Toast mToast;
     public Context mContext;
-    private TextView positionTextview;
     LocationListener locationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
@@ -41,6 +50,20 @@ public class MainActivity extends AppCompatActivity {
 
         }
     };
+    private TextView positionTextview;
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case SHOW_LOCATION:
+                    String currentPosition = (String) msg.obj;
+                    positionTextview.setText(currentPosition);
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
     private LocationManager locationManager;
     private String provider;
 
@@ -56,8 +79,8 @@ public class MainActivity extends AppCompatActivity {
             String[] permissionStrings = pack.requestedPermissions;
 //            showToast("权限清单--->"+ permissionStrings[0].toString(),Toast.LENGTH_LONG);
             //获取应用的所有的权限，用Log.d不出来
-            for(int i=0;i<permissionStrings.length;i++){
-                Log.d("HSQdebug",permissionStrings[i]);
+            for (int i = 0; i < permissionStrings.length; i++) {
+                Log.d("HSQdebug", permissionStrings[i]);
             }
         } catch (PackageManager.NameNotFoundException e) {
             e.printStackTrace();
@@ -82,7 +105,6 @@ public class MainActivity extends AppCompatActivity {
         }
         locationManager.requestLocationUpdates(provider, 5000, 1, locationListener);
 
-
     }
 
     @Override
@@ -93,10 +115,66 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void showLocation(Location location) {
-        String currentPosition = "latitude is " + location.getLatitude() + "\n" +
+    private void showLocation(final Location location) {
+       /* String currentPosition = "latitude is " + location.getLatitude() + "\n" +
                 "longitude is " + location.getLongitude();
-        positionTextview.setText(currentPosition);
+        positionTextview.setText(currentPosition);*/
+        //增加经纬度解析为当前城市代码
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                HttpURLConnection connection = null;
+                try {
+                    /*StringBuilder urlTemp = new StringBuilder();
+                    urlTemp.append("http://maps.googleapis.com/maps/api/geocode/json?latlng=");
+                    urlTemp.append(location.getLatitude()).append(",");
+                    urlTemp.append(location.getLongitude());
+                    urlTemp.append("&sensor=false");*/
+//                    String urlTemp="http://maps.googleapis.com/maps/api/geocode/json?latLng=31.318861370714846,121.3854713826456&sensor=false";
+//                    URL url = new URL(urlTemp);//出问题在于这个不是一个服务器地址，是一段json数据
+                    URL url = new URL("http://www.baidu.com");//经测试这个完全可以
+                    Log.i("HSQ-url", url.toString());
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setDoInput(true); //允许输入流，即允许下载
+                    connection.setDoOutput(true); //允许输出流，即允许上传
+                    connection.setUseCaches(false); //不使用缓冲
+                    connection.setRequestMethod("GET");
+                    /*connection.setRequestProperty("Content-type", "text/html");
+                    connection.setRequestProperty("Accept-Charset", "utf-8");
+                    connection.setRequestProperty("contentType", "utf-8");*/
+                    connection.setConnectTimeout(8000);
+                    connection.setReadTimeout(8000);
+                    Log.i("HSQ_responseCode", "" + connection.getResponseCode());
+
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(),"UTF-8"));
+                    String response = "";
+
+                    String line=null;
+
+                    while ((line = reader.readLine()) != null) {
+                        response+=line;
+                    }
+                    Log.i("HSQ-response",response);
+                    Message message = Message.obtain();
+                    message.what = SHOW_LOCATION;
+                    message.obj = response.toString();
+
+                    mHandler.sendMessage(message);
+
+                    Looper.prepare();
+                    showToast(response.toString(),3000);
+                    Looper.loop();
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    if (connection != null) {
+                        connection.disconnect();
+                    }
+                }
+            }
+        }).start();
+
     }
 
     public void showToast(String msg, int time) {
